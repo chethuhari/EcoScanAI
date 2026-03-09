@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Smart Waste AI{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Dashboard</h1>
+    <p class="subtitle">Waste analytics at a glance</p>
+</div>
+
+<div class="stats-grid" id="statsGrid">
+    <div class="stat-card">
+        <span class="stat-icon">📦</span>
+        <div class="stat-content">
+            <span class="stat-value" id="statTotal">0</span>
+            <span class="stat-label">Total Waste Processed</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <span class="stat-icon plastic">🥤</span>
+        <div class="stat-content">
+            <span class="stat-value" id="statPlastic">0</span>
+            <span class="stat-label">Plastic</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <span class="stat-icon paper">📄</span>
+        <div class="stat-content">
+            <span class="stat-value" id="statPaper">0</span>
+            <span class="stat-label">Paper</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <span class="stat-icon metal">🔩</span>
+        <div class="stat-content">
+            <span class="stat-value" id="statMetal">0</span>
+            <span class="stat-label">Metal</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <span class="stat-icon glass">🫙</span>
+        <div class="stat-content">
+            <span class="stat-value" id="statGlass">0</span>
+            <span class="stat-label">Glass</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <span class="stat-icon organic">🍃</span>
+        <div class="stat-content">
+            <span class="stat-value" id="statOrganic">0</span>
+            <span class="stat-label">Organic</span>
+        </div>
+    </div>
+    <div class="stat-card highlight">
+        <span class="stat-icon">📊</span>
+        <div class="stat-content">
+            <span class="stat-value" id="statConfidence">0%</span>
+            <span class="stat-label">Avg AI Confidence</span>
+        </div>
+    </div>
+    <div class="stat-card highlight">
+        <span class="stat-icon">🌍</span>
+        <div class="stat-content">
+            <span class="stat-value" id="statCO2">0 kg</span>
+            <span class="stat-label">CO₂ Saved</span>
+        </div>
+    </div>
+    <div class="stat-card highlight">
+        <span class="stat-icon">🌳</span>
+        <div class="stat-content">
+            <span class="stat-value" id="statTrees">0</span>
+            <span class="stat-label">Trees Saved</span>
+        </div>
+    </div>
+</div>
+
+<div class="charts-row">
+    <div class="chart-card">
+        <h3>Waste Distribution</h3>
+        <div class="chart-wrap">
+            <canvas id="chartPie"></canvas>
+        </div>
+    </div>
+    <div class="chart-card">
+        <h3>Waste Trend (Last 2 Months)</h3>
+        <div class="chart-wrap">
+            <canvas id="chartLine"></canvas>
+        </div>
+    </div>
+</div>
+<div class="charts-row">
+    <div class="chart-card chart-card-full">
+        <h3>Recycling Statistics</h3>
+        <div class="chart-wrap">
+            <canvas id="chartBar"></canvas>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+(function() {
+    let pieChart, lineChart, barChart;
+
+    async function loadDashboard() {
+        const res = await fetch('/api/analytics');
+        if (!res.ok) { window.location.href = '/login'; return; }
+        const data = await res.json();
+
+        document.getElementById('statTotal').textContent = data.total_waste || 0;
+        document.getElementById('statPlastic').textContent = data.counts?.Plastic || 0;
+        document.getElementById('statPaper').textContent = data.counts?.Paper || 0;
+        document.getElementById('statMetal').textContent = data.counts?.Metal || 0;
+        document.getElementById('statGlass').textContent = data.counts?.Glass || 0;
+        document.getElementById('statOrganic').textContent = data.counts?.Organic || 0;
+        document.getElementById('statConfidence').textContent = Math.round((data.average_confidence || 0) * 100) + '%';
+        document.getElementById('statCO2').textContent = (data.co2_saved_kg || 0) + ' kg';
+        document.getElementById('statTrees').textContent = (data.trees_saved || 0).toFixed(1);
+
+        const colors = { Plastic: '#3b82f6', Paper: '#f59e0b', Metal: '#6b7280', Glass: '#06b6d4', Organic: '#22c55e' };
+        const labels = ['Plastic', 'Paper', 'Metal', 'Glass', 'Organic'];
+        const values = labels.map(l => data.counts?.[l] || 0);
+
+        if (pieChart) pieChart.destroy();
+        pieChart = new Chart(document.getElementById('chartPie'), {
+            type: 'pie',
+            data: {
+                labels,
+                datasets: [{ data: values, backgroundColor: labels.map(l => colors[l]), borderWidth: 0 }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+        });
+
+        const trend = data.trend_60_days || [];
+        const last60 = trend.slice(-60);
+        if (lineChart) lineChart.destroy();
+        lineChart = new Chart(document.getElementById('chartLine'), {
+            type: 'line',
+            data: {
+                labels: last60.map(d => d.date.slice(5)),
+                datasets: [{ label: 'Detections', data: last60.map(d => d.count), borderColor: '#16a34a', backgroundColor: 'rgba(22,163,74,0.1)', fill: true, tension: 0.3 }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+        });
+
+        if (barChart) barChart.destroy();
+        barChart = new Chart(document.getElementById('chartBar'), {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [{ label: 'Count', data: values, backgroundColor: labels.map(l => colors[l]), borderRadius: 8 }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+        });
+    }
+
+    loadDashboard();
+})();
+</script>
+{% endblock %}

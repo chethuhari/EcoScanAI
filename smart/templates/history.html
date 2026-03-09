@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}History — Smart Waste AI{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Detection History</h1>
+    <p class="subtitle">All your waste classifications</p>
+</div>
+
+<div class="toolbar">
+    <div class="filter-group">
+        <label for="filterType">Filter by type</label>
+        <select id="filterType">
+            <option value="">All</option>
+            <option value="Plastic">Plastic</option>
+            <option value="Paper">Paper</option>
+            <option value="Metal">Metal</option>
+            <option value="Glass">Glass</option>
+            <option value="Organic">Organic</option>
+        </select>
+    </div>
+    <button type="button" class="btn btn-ghost" id="refreshBtn">Refresh</button>
+</div>
+
+<div class="table-card">
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Image</th>
+                    <th>Waste Type</th>
+                    <th>Confidence</th>
+                    <th>Date</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="historyBody">
+                <tr><td colspan="5" class="empty-state">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function() {
+    const tbody = document.getElementById('historyBody');
+    const filterType = document.getElementById('filterType');
+    const refreshBtn = document.getElementById('refreshBtn');
+
+    function loadHistory() {
+        const wasteType = filterType.value || '';
+        const url = wasteType ? '/api/detections?waste_type=' + encodeURIComponent(wasteType) : '/api/detections';
+        fetch(url)
+            .then(r => r.json())
+            .then(data => {
+                const list = data.detections || [];
+                if (list.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No detections yet</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = list.map(d => `
+                    <tr data-id="${d.id}">
+                        <td><img src="${d.image_path}" alt="" class="thumb"></td>
+                        <td><span class="badge badge-${(d.waste_type || '').toLowerCase()}">${d.waste_type}</span></td>
+                        <td>${Math.round((d.confidence_score || 0) * 100)}%</td>
+                        <td>${d.date || '—'}</td>
+                        <td><button type="button" class="btn btn-sm btn-danger delete-btn" data-id="${d.id}">Delete</button></td>
+                    </tr>
+                `).join('');
+                tbody.querySelectorAll('.delete-btn').forEach(btn => {
+                    btn.addEventListener('click', () => deleteRow(btn.dataset.id));
+                });
+            })
+            .catch(() => { tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Failed to load</td></tr>'; });
+    }
+
+    function deleteRow(id) {
+        if (!confirm('Delete this record?')) return;
+        fetch('/api/detections/' + id, { method: 'DELETE' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    const row = tbody.querySelector('tr[data-id="' + id + '"]');
+                    if (row) row.remove();
+                    if (tbody.querySelectorAll('tr').length === 0) loadHistory();
+                    window.toast?.('Deleted', 'success');
+                }
+            });
+    }
+
+    filterType.addEventListener('change', loadHistory);
+    refreshBtn.addEventListener('click', loadHistory);
+    loadHistory();
+})();
+</script>
+{% endblock %}

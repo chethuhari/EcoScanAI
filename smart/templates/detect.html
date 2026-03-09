@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Detect Waste — Smart Waste AI{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Detect Waste</h1>
+    <p class="subtitle">Upload an image to classify waste type</p>
+</div>
+
+<div class="detect-card">
+    <div class="detect-upload-zone" id="uploadZone">
+        <input type="file" id="fileInput" accept="image/*" hidden>
+        <div class="upload-placeholder" id="uploadPlaceholder">
+            <span class="upload-icon">📤</span>
+            <p>Click or drag image here</p>
+            <span class="upload-hint">PNG, JPG, JPEG, GIF, WEBP (max 8MB)</span>
+        </div>
+        <div class="upload-preview" id="uploadPreview" hidden>
+            <img id="previewImg" src="" alt="Preview">
+        </div>
+    </div>
+    <div class="detect-actions">
+        <button type="button" class="btn btn-primary" id="detectBtn" disabled>Detect Waste</button>
+    </div>
+    <div class="detect-loading" id="detectLoading" hidden>
+        <div class="spinner"></div>
+        <p>Analyzing image...</p>
+    </div>
+    <div class="detect-result" id="detectResult" hidden>
+        <h3>Result</h3>
+        <div class="result-badge" id="resultType">—</div>
+        <p class="result-confidence">Confidence: <strong id="resultConfidence">—</strong></p>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function() {
+    const fileInput = document.getElementById('fileInput');
+    const uploadZone = document.getElementById('uploadZone');
+    const uploadPlaceholder = document.getElementById('uploadPlaceholder');
+    const uploadPreview = document.getElementById('uploadPreview');
+    const previewImg = document.getElementById('previewImg');
+    const detectBtn = document.getElementById('detectBtn');
+    const detectLoading = document.getElementById('detectLoading');
+    const detectResult = document.getElementById('detectResult');
+    const resultType = document.getElementById('resultType');
+    const resultConfidence = document.getElementById('resultConfidence');
+
+    let selectedFile = null;
+
+    uploadZone.addEventListener('click', () => fileInput.click());
+    uploadZone.addEventListener('dragover', (e) => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+    uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+    uploadZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadZone.classList.remove('dragover');
+        const f = e.dataTransfer?.files?.[0];
+        if (f && f.type.startsWith('image/')) setFile(f);
+    });
+    fileInput.addEventListener('change', () => {
+        const f = fileInput.files?.[0];
+        if (f) setFile(f);
+    });
+
+    function setFile(file) {
+        selectedFile = file;
+        uploadPlaceholder.hidden = true;
+        uploadPreview.hidden = false;
+        previewImg.src = URL.createObjectURL(file);
+        detectBtn.disabled = false;
+        detectResult.hidden = true;
+    }
+
+    detectBtn.addEventListener('click', async () => {
+        if (!selectedFile) return;
+        detectBtn.disabled = true;
+        detectLoading.hidden = false;
+        detectResult.hidden = true;
+        try {
+            const form = new FormData();
+            form.append('image', selectedFile);
+            const res = await fetch('/api/predict', { method: 'POST', body: form });
+            const data = await res.json();
+            if (!res.ok) {
+                window.toast?.(data.error || 'Prediction failed', 'error');
+                return;
+            }
+            resultType.textContent = data.waste_type + ' detected';
+            resultConfidence.textContent = Math.round((data.confidence || 0) * 100) + '%';
+            detectResult.hidden = false;
+            window.toast?.('Detection saved', 'success');
+        } finally {
+            detectLoading.hidden = true;
+            detectBtn.disabled = false;
+        }
+    });
+})();
+</script>
+{% endblock %}

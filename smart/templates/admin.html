@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}Admin — Smart Waste AI{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Admin Panel</h1>
+    <p class="subtitle">Manage detections and users</p>
+</div>
+
+<div class="admin-tabs">
+    <button type="button" class="tab-btn active" data-tab="detections">All Detections</button>
+    <button type="button" class="tab-btn" data-tab="users">Users</button>
+    <button type="button" class="tab-btn" data-tab="stats">Statistics</button>
+</div>
+
+<div id="tabDetections" class="tab-pane active">
+    <div class="toolbar">
+        <select id="adminFilterType">
+            <option value="">All types</option>
+            <option value="Plastic">Plastic</option>
+            <option value="Paper">Paper</option>
+            <option value="Metal">Metal</option>
+            <option value="Glass">Glass</option>
+            <option value="Organic">Organic</option>
+        </select>
+        <button type="button" class="btn btn-primary" id="downloadReport">Download Report</button>
+    </div>
+    <div class="table-card">
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Image</th>
+                        <th>Waste Type</th>
+                        <th>Confidence</th>
+                        <th>Date</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="adminDetectionsBody">
+                    <tr><td colspan="5" class="empty-state">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div id="tabUsers" class="tab-pane" hidden>
+    <div class="table-card">
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Joined</th>
+                    </tr>
+                </thead>
+                <tbody id="adminUsersBody">
+                    <tr><td colspan="3" class="empty-state">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div id="tabStats" class="tab-pane" hidden>
+    <div class="stats-grid" id="adminStatsGrid"></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function() {
+    const tabs = document.querySelectorAll('.tab-btn');
+    const panes = { detections: document.getElementById('tabDetections'), users: document.getElementById('tabUsers'), stats: document.getElementById('tabStats') };
+    tabs.forEach(btn => {
+        btn.addEventListener('click', () => {
+            tabs.forEach(b => b.classList.remove('active'));
+            Object.keys(panes).forEach(k => { panes[k].classList.remove('active'); panes[k].hidden = true; });
+            btn.classList.add('active');
+            const t = btn.dataset.tab;
+            panes[t].classList.add('active');
+            panes[t].hidden = false;
+            if (t === 'detections') loadAdminDetections();
+            if (t === 'users') loadAdminUsers();
+            if (t === 'stats') loadAdminStats();
+        });
+    });
+
+    function loadAdminDetections() {
+        const body = document.getElementById('adminDetectionsBody');
+        const type = document.getElementById('adminFilterType').value;
+        const url = type ? '/api/detections?waste_type=' + encodeURIComponent(type) : '/api/detections';
+        fetch(url).then(r => r.json()).then(data => {
+            const list = data.detections || [];
+            if (list.length === 0) { body.innerHTML = '<tr><td colspan="5" class="empty-state">No detections</td></tr>'; return; }
+            body.innerHTML = list.map(d => `
+                <tr data-id="${d.id}">
+                    <td><img src="${d.image_path}" alt="" class="thumb"></td>
+                    <td>${d.waste_type}</td>
+                    <td>${Math.round((d.confidence_score || 0) * 100)}%</td>
+                    <td>${d.date || '—'}</td>
+                    <td><button type="button" class="btn btn-sm btn-danger delete-btn" data-id="${d.id}">Delete</button></td>
+                </tr>
+            `).join('');
+            body.querySelectorAll('.delete-btn').forEach(b => {
+                b.addEventListener('click', () => {
+                    fetch('/api/detections/' + b.dataset.id, { method: 'DELETE' }).then(r => r.json()).then(() => { loadAdminDetections(); window.toast?.('Deleted', 'success'); });
+                });
+            });
+        });
+    }
+
+    function loadAdminUsers() {
+        const body = document.getElementById('adminUsersBody');
+        fetch('/api/admin/users').then(r => r.json()).then(data => {
+            const list = data.users || [];
+            if (list.length === 0) { body.innerHTML = '<tr><td colspan="3" class="empty-state">No users</td></tr>'; return; }
+            body.innerHTML = list.map(u => `<tr><td>${u.name}</td><td>${u.email}</td><td>${u.created_at ? u.created_at.slice(0,10) : '—'}</td></tr>`).join('');
+        });
+    }
+
+    function loadAdminStats() {
+        const grid = document.getElementById('adminStatsGrid');
+        fetch('/api/admin/stats').then(r => r.json()).then(data => {
+            grid.innerHTML = `
+                <div class="stat-card"><div class="stat-content"><span class="stat-value">${data.total_waste || 0}</span><span class="stat-label">Total detections</span></div></div>
+                <div class="stat-card"><div class="stat-content"><span class="stat-value">${(data.average_confidence || 0) * 100}%</span><span class="stat-label">Avg confidence</span></div></div>
+                <div class="stat-card"><div class="stat-content"><span class="stat-value">${data.co2_saved_kg || 0} kg</span><span class="stat-label">CO₂ saved</span></div></div>
+                <div class="stat-card"><div class="stat-content"><span class="stat-value">${data.trees_saved || 0}</span><span class="stat-label">Trees saved</span></div></div>
+            `;
+        });
+    }
+
+    document.getElementById('adminFilterType').addEventListener('change', loadAdminDetections);
+    document.getElementById('downloadReport').addEventListener('click', () => {
+        fetch('/api/detections').then(r => r.json()).then(data => {
+            const csv = 'Image,Waste Type,Confidence,Date\n' + (data.detections || []).map(d => `${d.image_path},${d.waste_type},${d.confidence_score},${d.date}`).join('\n');
+            const a = document.createElement('a');
+            a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+            a.download = 'waste-detections-' + new Date().toISOString().slice(0,10) + '.csv';
+            a.click();
+            window.toast?.('Report downloaded', 'success');
+        });
+    });
+
+    loadAdminDetections();
+})();
+</script>
+{% endblock %}

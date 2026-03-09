@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Analytics — Smart Waste AI{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Analytics</h1>
+    <p class="subtitle">Detailed waste and impact metrics</p>
+</div>
+
+<div class="stats-grid compact">
+    <div class="stat-card highlight">
+        <span class="stat-icon">🌍</span>
+        <div class="stat-content">
+            <span class="stat-value" id="aCO2">0 kg</span>
+            <span class="stat-label">CO₂ saved (plastic recycled)</span>
+        </div>
+    </div>
+    <div class="stat-card highlight">
+        <span class="stat-icon">🌳</span>
+        <div class="stat-content">
+            <span class="stat-value" id="aTrees">0</span>
+            <span class="stat-label">Trees saved (paper recycled)</span>
+        </div>
+    </div>
+</div>
+
+<div class="charts-row">
+    <div class="chart-card chart-card-full">
+        <h3>Waste trend (last 60 days)</h3>
+        <div class="chart-wrap chart-tall">
+            <canvas id="chartTrend"></canvas>
+        </div>
+    </div>
+</div>
+<div class="charts-row">
+    <div class="chart-card">
+        <h3>AI confidence score</h3>
+        <div class="chart-wrap">
+            <canvas id="chartConfidence"></canvas>
+        </div>
+    </div>
+    <div class="chart-card">
+        <h3>Waste classification frequency</h3>
+        <div class="chart-wrap">
+            <canvas id="chartFreq"></canvas>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+(function() {
+    async function load() {
+        const res = await fetch('/api/analytics');
+        if (!res.ok) return;
+        const data = await res.json();
+        document.getElementById('aCO2').textContent = (data.co2_saved_kg || 0) + ' kg';
+        document.getElementById('aTrees').textContent = (data.trees_saved || 0).toFixed(1);
+
+        const trend = data.trend_60_days || [];
+        new Chart(document.getElementById('chartTrend'), {
+            type: 'line',
+            data: {
+                labels: trend.map(d => d.date),
+                datasets: [{ label: 'Detections', data: trend.map(d => d.count), borderColor: '#16a34a', fill: true, backgroundColor: 'rgba(22,163,74,0.1)', tension: 0.3 }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+        });
+
+        const labels = ['Plastic', 'Paper', 'Metal', 'Glass', 'Organic'];
+        const values = labels.map(l => data.counts?.[l] || 0);
+        const colors = ['#3b82f6', '#f59e0b', '#6b7280', '#06b6d4', '#22c55e'];
+        new Chart(document.getElementById('chartFreq'), {
+            type: 'doughnut',
+            data: { labels, datasets: [{ data: values, backgroundColor: colors }] },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+
+        document.getElementById('chartConfidence').parentElement.innerHTML = '<div class="big-stat"><span>' + Math.round((data.average_confidence || 0) * 100) + '%</span><p>Average confidence</p></div>';
+    }
+    load();
+})();
+</script>
+{% endblock %}
