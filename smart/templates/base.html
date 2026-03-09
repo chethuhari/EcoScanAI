@@ -8,15 +8,16 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='logo.png.webp') }}">
 </head>
 <body class="{% block body_class %}{% endblock %}">
     {% block body %}
     <div class="app-layout">
         <aside class="sidebar">
-            <div class="sidebar-brand">
-                <span class="brand-icon">♻</span>
-                <span class="brand-text">Smart Waste AI</span>
-            </div>
+            <div class="sidebar-brand" style="display:flex;align-items:center;gap:10px;">
+                 <img src="{{ url_for('static', filename='logo.png.webp') }}" width="35">
+                  <span class="brand-text">EcoScanAI</span>
+              </div>
             <nav class="sidebar-nav">
                 <a href="{{ url_for('dashboard') }}" class="nav-item {% if request.endpoint == 'dashboard' %}active{% endif %}">
                     <span class="nav-icon">📊</span>
